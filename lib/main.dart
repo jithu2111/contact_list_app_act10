@@ -42,45 +42,130 @@ class MyHomePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Contact List App'),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            ElevatedButton(
-              onPressed: () => _insert(context),
-              child: const Text('Insert Contact'),
+      body: Column(
+        children: [
+          // Search bar section
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Consumer<ContactProvider>(
+              builder: (context, provider, child) {
+                return TextField(
+                  onChanged: (value) => provider.searchContacts(value),
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or age...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: provider.searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => provider.clearSearch(),
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () => _query(context),
-              child: const Text('Query All Contacts'),
+          ),
+          // Buttons section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: () => _insert(context),
+                  child: const Text('Insert Contact'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _query(context),
+                  child: const Text('Query All'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _queryById(context),
+                  child: const Text('Query by ID'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _update(context),
+                  child: const Text('Update'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _delete(context),
+                  child: const Text('Delete'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _deleteAll(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Delete All'),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () => _queryById(context),
-              child: const Text('Query by ID'),
+          ),
+          const SizedBox(height: 8),
+          const Divider(thickness: 2),
+          // Contacts list section
+          Expanded(
+            child: Consumer<ContactProvider>(
+              builder: (context, provider, child) {
+                if (provider.isLoading) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                if (provider.contacts.isEmpty) {
+                  return Center(
+                    child: Text(
+                      provider.searchQuery.isNotEmpty
+                          ? 'No contacts found matching "${provider.searchQuery}"'
+                          : 'No contacts found.\nPress "Insert Contact" to add one.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: provider.contacts.length,
+                  itemBuilder: (context, index) {
+                    final contact = provider.contacts[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          child: Text('${contact.id}'),
+                        ),
+                        title: Text(
+                          contact.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                        subtitle: Text('Age: ${contact.age}'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _deleteSpecific(context, contact.id!),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () => _update(context),
-              child: const Text('Update Contact'),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () => _delete(context),
-              child: const Text('Delete Contact'),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () => _deleteAll(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Delete All Contacts'),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -126,5 +211,11 @@ class MyHomePage extends StatelessWidget {
   void _deleteAll(BuildContext context) async {
     final provider = Provider.of<ContactProvider>(context, listen: false);
     await provider.deleteAllContacts();
+  }
+
+  // Delete a specific contact (used by the delete icon on each contact)
+  void _deleteSpecific(BuildContext context, int id) async {
+    final provider = Provider.of<ContactProvider>(context, listen: false);
+    await provider.deleteContact(id);
   }
 }

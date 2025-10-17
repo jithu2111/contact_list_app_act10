@@ -8,13 +8,16 @@ import '../services/contact_service.dart';
 class ContactProvider extends ChangeNotifier {
   final ContactService _contactService;
   List<Contact> _contacts = [];
+  List<Contact> _filteredContacts = [];
   bool _isLoading = false;
+  String _searchQuery = '';
 
   ContactProvider(this._contactService);
 
   // Getters
-  List<Contact> get contacts => _contacts;
+  List<Contact> get contacts => _searchQuery.isEmpty ? _contacts : _filteredContacts;
   bool get isLoading => _isLoading;
+  String get searchQuery => _searchQuery;
 
   /// Insert a new contact
   Future<void> insertContact(String name, int age) async {
@@ -149,5 +152,33 @@ class ContactProvider extends ChangeNotifier {
       debugPrint('Error getting contact count: $e');
       rethrow;
     }
+  }
+
+  /// Search contacts by name or age
+  void searchContacts(String query) {
+    _searchQuery = query.trim();
+
+    if (_searchQuery.isEmpty) {
+      _filteredContacts = [];
+      notifyListeners();
+      return;
+    }
+
+    // Filter contacts by name (case-insensitive) or age
+    _filteredContacts = _contacts.where((contact) {
+      final nameMatch = contact.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      final ageMatch = contact.age.toString().contains(_searchQuery);
+      return nameMatch || ageMatch;
+    }).toList();
+
+    debugPrint('Search query: "$_searchQuery" - Found ${_filteredContacts.length} matches');
+    notifyListeners();
+  }
+
+  /// Clear search query and show all contacts
+  void clearSearch() {
+    _searchQuery = '';
+    _filteredContacts = [];
+    notifyListeners();
   }
 }
