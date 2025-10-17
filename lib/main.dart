@@ -1,122 +1,401 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'services/database_helper.dart';
+import 'services/contact_service.dart';
+import 'providers/contact_provider.dart';
 
-void main() {
+// Global database helper instance
+final dbHelper = DatabaseHelper();
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Initialize the database
+  await dbHelper.init();
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+    // Wrap the app with ChangeNotifierProvider for state management
+    return ChangeNotifierProvider(
+      create: (_) => ContactProvider(ContactService(dbHelper)),
+      child: MaterialApp(
+        title: 'Contact List App',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+        ),
+        home: const MyHomePage(),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+  const MyHomePage({super.key});
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  final TextEditingController _searchController = TextEditingController();
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('Contact List App'),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      body: Column(
+        children: [
+          // Search bar section
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Consumer<ContactProvider>(
+              builder: (context, provider, child) {
+                return TextField(
+                  controller: _searchController,
+                  onChanged: (value) => provider.searchContacts(value),
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or age...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: provider.searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              provider.clearSearch();
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                  ),
+                );
+              },
             ),
-          ],
-        ),
+          ),
+          // Buttons section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: () => _insert(context),
+                  child: const Text('Insert Contact'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _query(context),
+                  child: const Text('Query All'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _queryById(context),
+                  child: const Text('Query by ID'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _update(context),
+                  child: const Text('Update'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _delete(context),
+                  child: const Text('Delete'),
+                ),
+                ElevatedButton(
+                  onPressed: () => _deleteAll(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Delete All'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(thickness: 2),
+          // Contacts list section
+          Expanded(
+            child: Consumer<ContactProvider>(
+              builder: (context, provider, child) {
+                if (provider.isLoading) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                if (provider.contacts.isEmpty) {
+                  return Center(
+                    child: Text(
+                      provider.searchQuery.isNotEmpty
+                          ? 'No contacts found matching "${provider.searchQuery}"'
+                          : 'No contacts found.\nPress "Insert Contact" to add one.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: provider.contacts.length,
+                  itemBuilder: (context, index) {
+                    final contact = provider.contacts[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          child: Text('${contact.id}'),
+                        ),
+                        title: Text(
+                          contact.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                        subtitle: Text('Age: ${contact.age}'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () => _updateContact(context, contact.id!, contact.name, contact.age),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteSpecific(context, contact.id!),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  // Insert a new contact
+  void _insert(BuildContext context) async {
+    String? name;
+    String? age;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        final nameController = TextEditingController();
+        final ageController = TextEditingController();
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Add New Contact'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Name',
+                        hintText: 'Enter name',
+                        border: OutlineInputBorder(),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                      onChanged: (value) => name = value,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: ageController,
+                      decoration: const InputDecoration(
+                        labelText: 'Age',
+                        hintText: 'Enter age',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onChanged: (value) => age = value,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameController.text.trim().isNotEmpty &&
+                        ageController.text.trim().isNotEmpty) {
+                      name = nameController.text.trim();
+                      age = ageController.text.trim();
+                      Navigator.of(dialogContext).pop(true);
+                    }
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    // Wait for dialog to fully close before updating provider
+    if (result == true && name != null && age != null) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (context.mounted) {
+        final provider = Provider.of<ContactProvider>(context, listen: false);
+        final ageValue = int.tryParse(age!) ?? 0;
+        await provider.insertContact(name!, ageValue);
+      }
+    }
+  }
+
+  // Query all contacts
+  void _query(BuildContext context) async {
+    final provider = Provider.of<ContactProvider>(context, listen: false);
+    await provider.loadContacts();
+  }
+
+  // Query contact by ID (demonstrates the new queryById function)
+  void _queryById(BuildContext context) async {
+    final provider = Provider.of<ContactProvider>(context, listen: false);
+    // Query contact with ID 1
+    await provider.queryContactById(1);
+  }
+
+  // Update an existing contact
+  void _update(BuildContext context) async {
+    final provider = Provider.of<ContactProvider>(context, listen: false);
+    await provider.updateContact(1, 'Mary', 32);
+  }
+
+  // Delete a contact by ID
+  void _delete(BuildContext context) async {
+    final provider = Provider.of<ContactProvider>(context, listen: false);
+    final count = await provider.getContactCount();
+    if (count > 0) {
+      // Delete the contact with the highest ID (last inserted)
+      await provider.deleteContact(count);
+    } else {
+      debugPrint('No contacts to delete');
+    }
+  }
+
+  // Delete all contacts (demonstrates the new deleteAll function)
+  void _deleteAll(BuildContext context) async {
+    final provider = Provider.of<ContactProvider>(context, listen: false);
+    await provider.deleteAllContacts();
+  }
+
+  // Delete a specific contact (used by the delete icon on each contact)
+  void _deleteSpecific(BuildContext context, int id) async {
+    final provider = Provider.of<ContactProvider>(context, listen: false);
+    await provider.deleteContact(id);
+  }
+
+  // Update a contact with dialog
+  void _updateContact(BuildContext context, int id, String currentName, int currentAge) async {
+    String? name;
+    String? age;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        final nameController = TextEditingController(text: currentName);
+        final ageController = TextEditingController(text: currentAge.toString());
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Update Contact'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Name',
+                        hintText: 'Enter name',
+                        border: OutlineInputBorder(),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                      onChanged: (value) => name = value,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: ageController,
+                      decoration: const InputDecoration(
+                        labelText: 'Age',
+                        hintText: 'Enter age',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onChanged: (value) => age = value,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameController.text.trim().isNotEmpty &&
+                        ageController.text.trim().isNotEmpty) {
+                      name = nameController.text.trim();
+                      age = ageController.text.trim();
+                      Navigator.of(dialogContext).pop(true);
+                    }
+                  },
+                  child: const Text('Update'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    // Wait for dialog to fully close before updating provider
+    if (result == true && name != null && age != null) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (context.mounted) {
+        final provider = Provider.of<ContactProvider>(context, listen: false);
+        final ageValue = int.tryParse(age!) ?? 0;
+        await provider.updateContact(id, name!, ageValue);
+      }
+    }
   }
 }
