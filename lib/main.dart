@@ -33,8 +33,21 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatelessWidget {
+class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +63,7 @@ class MyHomePage extends StatelessWidget {
             child: Consumer<ContactProvider>(
               builder: (context, provider, child) {
                 return TextField(
+                  controller: _searchController,
                   onChanged: (value) => provider.searchContacts(value),
                   decoration: InputDecoration(
                     hintText: 'Search by name or age...',
@@ -57,7 +71,10 @@ class MyHomePage extends StatelessWidget {
                     suffixIcon: provider.searchQuery.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear),
-                            onPressed: () => provider.clearSearch(),
+                            onPressed: () {
+                              _searchController.clear();
+                              provider.clearSearch();
+                            },
                           )
                         : null,
                     border: OutlineInputBorder(
@@ -154,9 +171,18 @@ class MyHomePage extends StatelessWidget {
                           ),
                         ),
                         subtitle: Text('Age: ${contact.age}'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteSpecific(context, contact.id!),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () => _updateContact(context, contact.id!, contact.name, contact.age),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteSpecific(context, contact.id!),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -172,8 +198,82 @@ class MyHomePage extends StatelessWidget {
 
   // Insert a new contact
   void _insert(BuildContext context) async {
-    final provider = Provider.of<ContactProvider>(context, listen: false);
-    await provider.insertContact('Bob', 23);
+    String? name;
+    String? age;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        final nameController = TextEditingController();
+        final ageController = TextEditingController();
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Add New Contact'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Name',
+                        hintText: 'Enter name',
+                        border: OutlineInputBorder(),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                      onChanged: (value) => name = value,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: ageController,
+                      decoration: const InputDecoration(
+                        labelText: 'Age',
+                        hintText: 'Enter age',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onChanged: (value) => age = value,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameController.text.trim().isNotEmpty &&
+                        ageController.text.trim().isNotEmpty) {
+                      name = nameController.text.trim();
+                      age = ageController.text.trim();
+                      Navigator.of(dialogContext).pop(true);
+                    }
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    // Wait for dialog to fully close before updating provider
+    if (result == true && name != null && age != null) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (context.mounted) {
+        final provider = Provider.of<ContactProvider>(context, listen: false);
+        final ageValue = int.tryParse(age!) ?? 0;
+        await provider.insertContact(name!, ageValue);
+      }
+    }
   }
 
   // Query all contacts
@@ -217,5 +317,85 @@ class MyHomePage extends StatelessWidget {
   void _deleteSpecific(BuildContext context, int id) async {
     final provider = Provider.of<ContactProvider>(context, listen: false);
     await provider.deleteContact(id);
+  }
+
+  // Update a contact with dialog
+  void _updateContact(BuildContext context, int id, String currentName, int currentAge) async {
+    String? name;
+    String? age;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        final nameController = TextEditingController(text: currentName);
+        final ageController = TextEditingController(text: currentAge.toString());
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Update Contact'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Name',
+                        hintText: 'Enter name',
+                        border: OutlineInputBorder(),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                      onChanged: (value) => name = value,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: ageController,
+                      decoration: const InputDecoration(
+                        labelText: 'Age',
+                        hintText: 'Enter age',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onChanged: (value) => age = value,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameController.text.trim().isNotEmpty &&
+                        ageController.text.trim().isNotEmpty) {
+                      name = nameController.text.trim();
+                      age = ageController.text.trim();
+                      Navigator.of(dialogContext).pop(true);
+                    }
+                  },
+                  child: const Text('Update'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    // Wait for dialog to fully close before updating provider
+    if (result == true && name != null && age != null) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (context.mounted) {
+        final provider = Provider.of<ContactProvider>(context, listen: false);
+        final ageValue = int.tryParse(age!) ?? 0;
+        await provider.updateContact(id, name!, ageValue);
+      }
+    }
   }
 }

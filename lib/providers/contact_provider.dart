@@ -47,6 +47,16 @@ class ContactProvider extends ChangeNotifier {
       notifyListeners();
 
       _contacts = await _contactService.getAllContacts();
+
+      // Re-apply search filter if there's an active search
+      if (_searchQuery.isNotEmpty) {
+        _filteredContacts = _contacts.where((contact) {
+          final nameMatch = contact.name.toLowerCase().contains(_searchQuery.toLowerCase());
+          final ageMatch = contact.age.toString().contains(_searchQuery);
+          return nameMatch || ageMatch;
+        }).toList();
+      }
+
       debugPrint('Loaded ${_contacts.length} contacts');
 
       // Print all contacts for debugging
